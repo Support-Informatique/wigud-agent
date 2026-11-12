@@ -1,55 +1,62 @@
-# Wigud host agent — releases
+# Wigud host agent
 
-This repository only hosts the **releases** of the Wigud host agent. Wigud is the fleet health monitor of CODEVS Sàrl. The source code lives in a private repository, and a workflow there publishes each release here.
+Releases of the Wigud host agent. It reports a server's or PC's health to your Wigud server every 60 seconds. The source lives in a private repository; this file is published from there with each release.
 
-The agent is a small static binary for Linux (amd64 and arm64), run by systemd. Every 60 seconds it reports to your Wigud server:
+Get the token in Wigud: **Hosts → Add server** (shown once), or the key button on the host page for a new one. Wigud also shows these commands with your URL and token filled in.
 
-- CPU, memory and filesystem usage;
-- system information (OS, kernel, uptime).
+## Linux (systemd, amd64 or arm64)
 
-It never runs commands. It only reads `/proc` and filesystem usage, and it contains no secrets: each server gets its own token at install time.
-
-## Install
-
-1. In Wigud, open **Hosts → Add server** and copy the token. It is shown only once.
-2. On the server, as root:
-
-   ```sh
-   curl -fsSLO https://github.com/Support-Informatique/wigud-agent/releases/latest/download/install.sh
-   sudo WIGUD_SERVER_URL=https://wigud-server.example.ch WIGUD_SOURCE_TOKEN=wg_src_… sh install.sh
-   ```
-
-The installer:
-
-- downloads the binary for this CPU and checks it against the release's `SHA256SUMS`;
-- installs it to `/usr/local/bin/wigud-agent`;
-- writes `/etc/wigud/agent.env` (mode 600);
-- sends one test report, then enables `wigud-agent.service`.
-
-Follow the logs with `journalctl -u wigud-agent -f`.
-
-To install a specific version instead of the latest, add `WIGUD_AGENT_VERSION=0.1.0`.
-
-## Update
-
-Run `install.sh` again with the same variables. The token is in `/etc/wigud/agent.env` if you need it.
-
-## Uninstall
+**Install**
 
 ```sh
-sudo systemctl disable --now wigud-agent
-sudo rm /etc/systemd/system/wigud-agent.service /usr/local/bin/wigud-agent
-sudo rm -r /etc/wigud
-sudo systemctl daemon-reload
+curl -fsSLO https://github.com/Support-Informatique/wigud-agent/releases/latest/download/install.sh && sudo WIGUD_SERVER_URL=https://your-wigud-server WIGUD_SOURCE_TOKEN=wg_src_… sh install.sh
 ```
 
-Then delete the host in Wigud.
+Add `WIGUD_DOCKER=1` before `sh` to also monitor Docker (it gives the agent the `docker` group, which is root-equivalent).
 
-## Release files
+**Update**
 
-| File | Purpose |
-|---|---|
-| `wigud-agent-linux-amd64` | binary for x86-64 |
-| `wigud-agent-linux-arm64` | binary for ARM64 |
-| `install.sh` | installer (systemd) |
-| `SHA256SUMS` | checksums of the files above |
+```sh
+curl -fsSLO https://github.com/Support-Informatique/wigud-agent/releases/latest/download/install.sh && sudo sh install.sh
+```
+
+It keeps the URL, token and Docker choice. Check it: `journalctl -u wigud-agent -n 20`.
+
+**Uninstall**
+
+```sh
+sudo systemctl disable --now wigud-agent && sudo rm -rf /etc/systemd/system/wigud-agent.service /usr/local/bin/wigud-agent /etc/wigud /var/lib/wigud-agent && sudo systemctl daemon-reload && sudo userdel wigud-agent
+```
+
+## Windows (x64 or ARM64)
+
+Run in **PowerShell as Administrator**.
+
+**Install**
+
+```powershell
+Invoke-WebRequest -UseBasicParsing 'https://github.com/Support-Informatique/wigud-agent/releases/latest/download/install.ps1' -OutFile install.ps1; Unblock-File .\install.ps1; powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\install.ps1 -ServerUrl 'https://your-wigud-server' -SourceToken 'wg_src_…'
+```
+
+**Update**
+
+```powershell
+Invoke-WebRequest -UseBasicParsing 'https://github.com/Support-Informatique/wigud-agent/releases/latest/download/install.ps1' -OutFile install.ps1; Unblock-File .\install.ps1; powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\install.ps1
+```
+
+It keeps the URL and token. Logs: **Event Viewer → Windows Logs → Application**, source **WigudAgent**.
+
+**Uninstall**
+
+```powershell
+Stop-Service WigudAgent; sc.exe delete WigudAgent; Remove-Item -Recurse -Force "$env:ProgramFiles\Wigud Agent", "$env:ProgramData\Wigud Agent"
+```
+
+After uninstalling, delete the host in Wigud.
+
+## Notes
+
+- Both installers check the download against `SHA256SUMS` and send a test report before starting the service; if it fails, nothing changes.
+- To use a specific version: Linux `WIGUD_AGENT_VERSION=0.5.0`, Windows `-Version 0.5.0`.
+- New token (after **New agent token** in Wigud): run the install command again with the new token.
+- The agent only reads (system facts, logs, the Docker API). Wigud cannot send it commands.
